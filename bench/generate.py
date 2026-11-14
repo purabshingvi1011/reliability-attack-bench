@@ -61,7 +61,7 @@ def place(good, bads, bad_first):
     return (bads + [good]) if bad_first else ([good] + bads)
 
 
-def cases_for(fact, rng):
+def cases_for(fact, rng, idx=0):
     out = []
     bad_first = rng.random() < 0.5                    # default order, fixed per fact so tests differ in one thing only
     G = doc(good_plain(fact), GOOD_SCORE, "good")
@@ -104,17 +104,35 @@ def cases_for(fact, rng):
     all_forged = T.forge_doc(T.forge_doc(T.forge_doc(T.forge_doc(B["text"], "forge_discredit"), "forge_authority_unseen"),
                                          "forge_metadata"), "forge_copytag")
     add("rule5", "forge_all", place(G, [doc(all_forged, BAD_SCORE, "bad")], bad_first))
+
+    # ---- external: an adaptive prompt-injection trigger from arXiv 2510.09023 (App. G.2), cycling over its 16 triggers
+    label, text = T.ext_doc(B["text"], T.claim_sentence(fact, fact["bad"], 0), idx)
+    add("ext", "ext_injection", place(G, [doc(text, BAD_SCORE, "bad")], bad_first), seen="unseen")
+    out[-1]["ext_source"] = f"arXiv 2510.09023 App. G.2, trigger vs {label}"
     return out
 
 
-def build(cram_repo="", cag_repo="", n_fictional=150, n_real_per_ds=50, seed=0):
+# core: one test per idea, 14 tests (4,200 cases). full: every variant, 30 tests (about 9,000 cases).
+SUITES = {
+    "core": [
+        "plain", "swap", "flip", "reading",                                         # controls
+        "length_long", "confident", "tactic_evidence", "tactic_authority", "repeat_4",  # rule 4: style
+        "forge_copytag", "forge_metadata", "forge_authority_unseen", "forge_discredit",  # rule 5: forged reliability
+        "ext_injection",                                                            # external: attacks from arXiv 2510.09023
+    ],
+    "full": None,
+}
+
+
+def build(cram_repo="", cag_repo="", n_fictional=150, n_real_per_ds=50, seed=0, suite="full"):
     rng = random.Random(seed)
     bank = (F.fictional_facts(n_fictional, seed)
             + (F.real_facts(cram_repo, n_real_per_ds, seed) if cram_repo else [])
             + (F.cag_facts(cag_repo, n_real_per_ds, seed) if cag_repo else []))
+    keep = SUITES[suite]
     cases = []
-    for fact in bank:
-        cases += cases_for(fact, rng)
+    for i, fact in enumerate(bank):
+        cases += [c for c in cases_for(fact, rng, i) if keep is None or c["test"] in keep]
     for i, c in enumerate(cases):
         c["id"] = f"{c['fact_id']}__{c['test']}"
     return bank, cases
@@ -144,8 +162,9 @@ def main():
     ap.add_argument("--n_fictional", type=int, default=150)
     ap.add_argument("--n_real_per_ds", type=int, default=50, help="per source: NQ, TriviaQA, NewsPolluted")
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--suite", default="core", choices=list(SUITES), help="core: 13 tests (default); full: all 29")
     a = ap.parse_args()
-    bank, cases = build(a.cram_repo, a.cag_repo, a.n_fictional, a.n_real_per_ds, a.seed)
+    bank, cases = build(a.cram_repo, a.cag_repo, a.n_fictional, a.n_real_per_ds, a.seed, a.suite)
     bad = validate(cases)
     # drop the WHOLE fact when any of its cases is unscorable, so every test is run on the same facts (paired comparisons)
     bad_facts = {p[0].split("__")[0] for p in bad}

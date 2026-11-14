@@ -1,0 +1,5 @@
+torch>=2.7
+transformers>=5.5
+accelerate
+tokenizers
+safetensors

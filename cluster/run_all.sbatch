@@ -1,7 +1,7 @@
 #!/bin/bash
 # Runs the benchmark for Llama-3.1-8B-Instruct in BOTH layouts (inline: documents inside the user message; tool: each document
 # a tool result), five methods each, then CAG-7B (inline only), then the judge and the tables.
-# 11 runs x 8,671 short replies: about 4 to 8 GPU-hours on one A100.
+# 11 runs x 4,200 short replies (core suite): about 2 to 4 GPU-hours on one A100. Use --suite full to generate all 30 tests.
 #
 # Edit the paths below, then:  sbatch cluster/run_all.sbatch
 # Check the account and partition names with Sriram (group sriramc2-ic, partition IllinoisComputes-GPU at the time of writing).
@@ -26,7 +26,7 @@ cd "$BENCH_DIR"; mkdir -p logs runs results
 # real facts come from the original repos, not from David's copies
 [ -d upstream/CrAM ] || git clone --depth 1 https://github.com/Aatrox103/CrAM.git upstream/CrAM
 [ -d upstream/CAG ]  || git clone --depth 1 https://github.com/panruotong/CAG.git upstream/CAG
-python -m bench.generate --cram_repo upstream/CrAM --cag_repo upstream/CAG --out data/bench.jsonl --facts_out data/facts.jsonl
+python -m bench.generate --cram_repo upstream/CrAM --cag_repo upstream/CAG --suite core --out data/bench.jsonl --facts_out data/facts.jsonl
 
 # the current vectors were trained with a doubled begin-of-text token, so evaluate them the same way (drop --double_bos once
 # David's retrained vectors from the simplify-data branch are in). Each layout uses the direction and the CrAM heads made for it:

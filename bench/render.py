@@ -24,8 +24,11 @@ INSTR_REPORT = ("Using the documents {where}, report what Document {k} says. Rep
 POLICY = (" Each document has a reliability score from 1 (unreliable) to 5 (highly reliable), assigned by the system. "
           "When documents disagree, trust the more reliable one.")
 
-# CAG (Pan et al. 2024). Preamble and labels as read from the CAG repo's demo.py; VERIFY against the repo before the final
-# run (see README: the "Middle" spelling and the exact FastChat "CAG" template were not confirmed).
+# CAG (Pan et al. 2024), checked against github.com/panruotong/CAG (commit 4b6ead1): the system message is the FastChat "CAG"
+# template registered in its README (roles USER / ASSISTANT, SeparatorStyle.ADD_COLON_TWO, sep " "), and the user message has
+# the shape of its benchmark files (datasets/*/*_cred_qstart*.json, used by eval.py):
+#   "Question:{q}\nDocs:{High|Middle|Low} credibility of text: {doc}\n...\n\nAnswer:"
+# so the prompt is "{system} USER: {message} ASSISTANT:". The labels High / Middle / Low are the spellings in its data files.
 CAG_PREAMBLE = ("A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, "
                 "and polite answers to the user's questions.The assistant answers questions based on given passages. Each article "
                 "has a credibility rating that is categorized as: high, medium, or low. Credibility reflects the relevance and "
@@ -66,7 +69,8 @@ def build(case, method, layout="inline"):
         assert layout == "inline", "CAG's own prompt format has no tool messages; run CAG in the inline layout only"
         blocks = "\n".join(f"{cag_label(s)} credibility of text: {t}" for t, s in zip(texts, scores))
         question = q if case["task"] == "answer" else f"What does passage {k} (counting from the top) say? {q}"
-        return {"kind": "raw", "text": f"{CAG_PREAMBLE} USER: Question:{question}\n{blocks} ASSISTANT:", "texts": texts, "scores": scores}
+        message = f"Question:{question}\nDocs:{blocks}\n\nAnswer:"
+        return {"kind": "raw", "text": f"{CAG_PREAMBLE} USER: {message} ASSISTANT:", "texts": texts, "scores": scores}
     show = method in ("tags", "direction_tags")
     policy = POLICY if show else ""
     where = "below" if layout == "inline" else "returned by the search tool"

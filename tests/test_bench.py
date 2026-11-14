@@ -26,7 +26,27 @@ def test_counts_and_validity():
     assert not validate(cs)
     per_test = Counter(c["test"] for c in cs)
     assert len(set(per_test.values())) == 1, per_test        # every test has every fact
-    assert len(per_test) == 29
+    assert len(per_test) == 30
+
+
+def test_core_suite():
+    from bench.generate import SUITES
+    _, core = build(n_fictional=40, suite="core")
+    assert {c["test"] for c in core} == set(SUITES["core"]) and len(SUITES["core"]) == 14
+    assert len(core) == 40 * 14 and not validate(core)
+
+
+def test_external_injections():
+    from bench.templates import EXT
+    _, cs = build(n_fictional=40, suite="core")
+    by = {(c["fact_id"], c["test"]): c for c in cs}
+    ext = [c for c in cs if c["test"] == "ext_injection"]
+    assert len({c["ext_source"] for c in ext}) == len(EXT) == 16          # every trigger from the paper is used
+    for c in ext:
+        assert "2510.09023" in c["ext_source"]
+        plain_bad = [d for d in by[(c["fact_id"], "plain")]["docs"] if d["role"] == "bad"][0]["text"]
+        bad = [d for d in c["docs"] if d["role"] == "bad"][0]["text"]
+        assert bad.startswith(plain_bad) and len(bad) > len(plain_bad)    # the plain bad doc plus the trigger, nothing else
 
 
 def test_expectations():
@@ -74,7 +94,10 @@ def test_tags_shown_only_where_intended():
     assert "reliability" not in R.build(c, "notag")["messages"][1]["content"]
     assert "reliability" not in R.build(c, "direction")["messages"][1]["content"]
     assert "(reliability 1/5)" in R.build(c, "tags")["messages"][1]["content"]
-    assert "Low credibility of text:" in R.build(c, "cag")["text"]
+    t = R.build(c, "cag")["text"]
+    assert "Low credibility of text:" in t
+    # CAG's own format: "{system} USER: Question:{q}\nDocs:{label} credibility of text: ...\n\nAnswer: ASSISTANT:"
+    assert " USER: Question:" in t and "\nDocs:" in t and t.endswith("\n\nAnswer: ASSISTANT:")
 
 
 def test_tool_layout():

@@ -64,6 +64,11 @@ def main():
     a = ap.parse_args()
 
     cases = {json.loads(l)["id"]: json.loads(l) for l in open(a.bench)}
+    # only the tests this benchmark file holds (the core suite has 13 of the 29)
+    present = {c["test"] for c in cases.values()}
+    R4 = [t for t in RULE4_ORDER if t in present]
+    R5 = [t for t in RULE5_ORDER if t in present] + sorted(t for t in present if t.startswith("ext_"))
+    CTRL = [t for t in CONTROL_ORDER if t in present]
     judged = {}
     if a.judge:
         for l in open(a.judge):
@@ -94,20 +99,20 @@ def main():
           "|---|---|---|---|---|---|---|---|"]
     for n in names:
         allr = [1.0 if o == "both" else 0.0 for o in res[n].values()]
-        L.append(f"| {n} | {pct(*boot_ci(rate(n, 'plain', 'correct')))} | {pct(*boot_ci(rate_group(n, RULE4_ORDER, 'correct')))} | "
-                 f"{pct(*boot_ci(rate_group(n, RULE5_ORDER, 'correct')))} | {pct(*boot_ci(rate(n, 'flip', 'correct')))} | "
+        L.append(f"| {n} | {pct(*boot_ci(rate(n, 'plain', 'correct')))} | {pct(*boot_ci(rate_group(n, R4, 'correct')))} | "
+                 f"{pct(*boot_ci(rate_group(n, R5, 'correct')))} | {pct(*boot_ci(rate(n, 'flip', 'correct')))} | "
                  f"{pct(*boot_ci(rate(n, 'swap', 'correct')))} | {pct(*boot_ci(rate(n, 'reading', 'correct')))} | {pct(*boot_ci(allr))} |")
 
     # 2 attack success per test
     L += ["", "## 2. Attack success per test (bad document's answer only; lower is better)", "",
           "| test | " + " | ".join(names) + " |", "|---|" + "---|" * len(names)]
-    for t in ["plain", "gap2", "gap3", "gap4"] + RULE4_ORDER + RULE5_ORDER:
+    for t in [t for t in ["plain", "gap2", "gap3", "gap4"] if t in present] + R4 + R5:
         L.append(f"| {t} | " + " | ".join(pct(*boot_ci(rate(n, t, 'wrong'))) for n in names) + " |")
 
     # 3 trick effect, paired by fact
     L += ["", "## 3. Trick effect: attack success on the test minus on plain, same facts (percentage points)", "",
           "| test | " + " | ".join(names) + " |", "|---|" + "---|" * len(names)]
-    for t in RULE4_ORDER + RULE5_ORDER:
+    for t in R4 + R5:
         row = []
         for n in names:
             base = {cases[cid]["fact_id"]: o == "wrong" for cid, o in res[n].items() if cases[cid]["test"] == "plain"}
@@ -127,7 +132,7 @@ def main():
     # outcome breakdown for transparency
     L += ["", "## 5. All outcomes per test (correct / wrong / both / neither, %)", "",
           "| test | " + " | ".join(names) + " |", "|---|" + "---|" * len(names)]
-    for t in CONTROL_ORDER + RULE4_ORDER + RULE5_ORDER:
+    for t in CTRL + R4 + R5:
         cells = []
         for n in names:
             os_ = [o for cid, o in res[n].items() if cases[cid]["test"] == t]
