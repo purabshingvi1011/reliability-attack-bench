@@ -6,6 +6,10 @@
   cram           the notag prompt; scores go to CrAM's attention hook (out of band)
   direction      the notag prompt; scores go to David's learned direction (out of band)
   direction_tags the tags prompt AND the direction
+  direction_floor the notag prompt; direction strengths squeezed into [floor, 1] (default floor 0.75), so even the
+                  top-scored document gets some push (David's "compressed" setting)
+  direction_mean  the notag prompt; every document gets the SAME strength, the average of the floor strengths for
+                  that question (a control: it knows the average push but not which document is trusted)
 
 The forged tag in rule-5 cases ({{FORGED_TAG}}) is replaced by the HIGHEST tag in the method's own format, so the
 forgery copies exactly what a real high-reliability label looks like to that method. Out-of-band methods have no
@@ -87,7 +91,18 @@ def build(case, method, layout="inline"):
     return {"kind": "chat", "messages": msgs, "texts": texts, "scores": scores}
 
 
-def strengths(scores, scale=1.0):
-    """David's benchmark rule: strength = scale * (1 - score / max score); the top-scored documents are untouched"""
+def strengths(scores, scale=1.0, mode="original", floor=0.75):
+    """David's benchmark rule: strength = scale * (1 - score / max score); the top-scored documents are untouched.
+    mode "floor": floor + (1 - floor) * that, so strengths lie in [floor, 1].
+    mode "mean":  every document gets the mean of the floor strengths (same average push, no ranking)."""
     mx = max(scores)
-    return [scale * (1 - s / mx) for s in scores]
+    base = [1 - s / mx for s in scores]
+    if mode in ("floor", "mean"):
+        base = [floor + (1 - floor) * b for b in base]
+    if mode == "mean":
+        base = [sum(base) / len(base)] * len(base)
+    return [scale * b for b in base]
+
+
+def strength_mode(method):
+    return {"direction_floor": "floor", "direction_mean": "mean"}.get(method, "original")

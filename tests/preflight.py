@@ -171,7 +171,7 @@ def run(args):
     return r.returncode, (r.stdout + r.stderr)[-600:]
 runs = f"{TMP}/runs"; os.makedirs(runs, exist_ok=True)
 for layout in ("inline", "tool"):
-    for m in ("notag", "tags", "direction", "direction_tags", "cram", "cag"):
+    for m in ("notag", "tags", "direction", "direction_tags", "direction_floor", "direction_mean", "cram", "cag"):
         if m == "cag" and layout == "tool": continue
         extra = ["--vectors", f"{MD}/vectors.pt"] if m.startswith("direction") else ["--heads", f"{MD}/heads.json", "--n_heads", "6"] if m == "cram" else []
         out = f"{runs}/{layout}_{m}.jsonl"

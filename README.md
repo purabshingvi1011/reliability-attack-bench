@@ -124,6 +124,8 @@ MELON), each against Gemini-2.5 Pro and against GPT-5 Mini, on AgentDojo.
 | `cram` | no tags in the text; CrAM ([Deng et al., AAAI 2025](https://arxiv.org/abs/2406.11497)) lowers attention to low-scored documents in its selected heads |
 | `direction` | no tags in the text; our learned direction at strength 1 - score/5 on each document |
 | `direction_tags` | the tags prompt and the direction together |
+| `direction_floor` | the direction with strengths squeezed into [0.75, 1] (`--floor` to change), so even the trusted document gets some push (David's compressed setting) |
+| `direction_mean` | control: every document gets the same strength, the average of the floor strengths. It can't tell sources apart, so on invented facts it should pick the right answer about half the time |
 
 The main contrast: methods that put reliability in the text (`tags`, `cag`) against methods that pass it outside the text
 (`cram`, `direction`), on the rule-5 tests.
@@ -162,7 +164,7 @@ python -m bench.score --runs "runs/inline_*.jsonl" --judge runs/judge.json --out
 | `bench/run_eval.py` | runs one method in one layout, saves every reply, resumes if stopped |
 | `bench/judge.py` | settles replies that name both answers |
 | `bench/score.py` | the tables |
-| `cluster/run_all.sbatch` | the whole run: both layouts, five methods each, plus CAG (about 2 to 4 GPU-hours on one A100 for the core suite) |
+| `cluster/run_all.sbatch` | the whole run: both layouts, seven methods each, plus CAG (about 2 to 4 GPU-hours on one A100 for the core suite) |
 | `tests/test_bench.py` | checks that need no GPU |
 | `tests/make_tiny_model.py` | a tiny random model for testing the pipeline on CPU |
 | `tests/preflight.py` | full CPU check: prompts, both hooks against David's originals, batching, every method and layout (`python tests/preflight.py <this dir> <David's repo> <tmp dir>`) |

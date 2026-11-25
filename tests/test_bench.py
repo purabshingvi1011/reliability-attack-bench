@@ -125,6 +125,9 @@ def test_reading_question_points_at_bad_doc():
 def test_strengths():
     assert R.strengths([5, 1]) == [0.0, 0.8]
     assert R.strengths([5, 5, 1], scale=0.5) == [0.0, 0.0, 0.4]
+    f = R.strengths([5, 1], mode="floor"); assert abs(f[0] - 0.75) < 1e-9 and abs(f[1] - 0.95) < 1e-9
+    m = R.strengths([5, 1], mode="mean"); assert abs(m[0] - 0.85) < 1e-9 and m[0] == m[1]
+    assert R.strength_mode("direction_floor") == "floor" and R.strength_mode("direction") == "original"
 
 
 def test_scoring():

@@ -23,7 +23,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from . import render as R
 from .hooks import CramHook, LayerVectors, load_heads
 
-METHODS = ("notag", "tags", "cag", "cram", "direction", "direction_tags")
+METHODS = ("notag", "tags", "cag", "cram", "direction", "direction_tags", "direction_floor", "direction_mean")
 
 
 def prompt_string(tok, built):
@@ -79,6 +79,7 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--vectors", default="", help="direction: vectors.pt from David's repo")
     ap.add_argument("--dir_scale", type=float, default=1.0, help="direction: multiplies every strength")
+    ap.add_argument("--floor", type=float, default=0.75, help="direction_floor / direction_mean: lowest strength")
     ap.add_argument("--heads", default="", help="cram: head list JSON")
     ap.add_argument("--n_heads", type=int, default=894, help="cram: top heads used (CrAM: 894 for NQ, 506 for TriviaQA)")
     ap.add_argument("--bs", type=int, default=16); ap.add_argument("--max_new", type=int, default=48)
@@ -133,7 +134,7 @@ def main():
         offs = enc.pop("offset_mapping")
         enc = {k: v.to(a.device) for k, v in enc.items()}
         if dvec is not None:
-            dm = torch.stack([token_values(offs[j].tolist(), sp, R.strengths(sc, a.dir_scale)) for j, (_, _, sp, sc) in enumerate(batch)])
+            dm = torch.stack([token_values(offs[j].tolist(), sp, R.strengths(sc, a.dir_scale, R.strength_mode(a.method), a.floor)) for j, (_, _, sp, sc) in enumerate(batch)])
             dvec.set(torch.ones(len(batch)), dm)
         if cram is not None:
             def logw(sc):

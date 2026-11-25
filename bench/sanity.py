@@ -55,12 +55,12 @@ def main():
         if rd:
             v = rate(rd, "correct"); check(f"{tag}: reading task", v >= 0.8, v >= 0.6, f"{v:.0%} report the named document correctly")
         pl = by("plain")
-        if method == "notag":
+        if method in ("notag", "direction_mean"):
             pf = by("plain", "fictional")
             if pf:
                 g = rate(pf, "correct") + 0.5 * rate(pf, "both")
                 check(f"{tag}: no hidden cue (invented facts, plain)", 0.25 <= g <= 0.75, 0.15 <= g <= 0.85,
-                      f"picks the good document {g:.0%} of the time; with no scores this should be near 50%")
+                      f"picks the good document {g:.0%} of the time; with no scores (or equal strengths) this should be near 50%")
         elif pl:
             v = rate(pl, "correct")
             check(f"{tag}: plain cases", v >= 0.7, v >= 0.5, f"{v:.0%} correct")
@@ -70,7 +70,7 @@ def main():
     base = {lay: [r for c, r, _ in [(c, classify(c, o), o) for c, o in runs[(lay, "notag")]] if c["test"] == "plain"]
             for lay in ("inline", "tool") if (lay, "notag") in runs}
     for (layout, method), recs in sorted(runs.items()):
-        if method in ("cram", "direction") and layout in base:
+        if method in ("cram", "direction", "direction_floor") and layout in base:
             pl = [classify(c, o) for c, o in recs if c["test"] == "plain"]
             if pl and base[layout]:
                 m, b = rate(pl, "wrong"), rate(base[layout], "wrong")

@@ -43,6 +43,8 @@ for LAYOUT in inline tool; do
   python -m bench.run_eval --method tags           $COMMON --out runs/${LAYOUT}_tags.jsonl
   python -m bench.run_eval --method direction      $COMMON --out runs/${LAYOUT}_direction.jsonl --vectors $VEC
   python -m bench.run_eval --method direction_tags $COMMON --out runs/${LAYOUT}_direction_tags.jsonl --vectors $VEC
+  python -m bench.run_eval --method direction_floor $COMMON --out runs/${LAYOUT}_direction_floor.jsonl --vectors $VEC
+  python -m bench.run_eval --method direction_mean  $COMMON --out runs/${LAYOUT}_direction_mean.jsonl  --vectors $VEC
   python -m bench.run_eval --method cram           $COMMON --out runs/${LAYOUT}_cram.jsonl --heads $HEADS --bs 8
 done
 python -m bench.run_eval --method cag --model $CAG --layout inline --out runs/inline_cag7b.jsonl --max_new 200 --bs 8 --dtype float16
