@@ -107,14 +107,83 @@ def fictional_facts(n=150, seed=0):
 
 # ---------------------------------------------------------------- real facts (CrAM's NQ / TriviaQA)
 
-def _passage_window(text, aliases, n_words=90):
-    """a window of about n_words around the first mention of the answer"""
+_PLACEHOLDER = re.compile(r"\[[^\]]{0,40}\]")                    # writing-template leftovers: [City], [Insert Date]
+_MARKER = re.compile(r"\b(Body|Headline|Title|Subheading|Dateline)\s*:\s*\d*\.?\s*")  # "Body: 1."
+_wkey = lambda w: re.sub(r"[^\w]", "", w).lower()
+
+
+def clean_text(text):
+    """source-data quirks: doubled quote marks (""ploughed""), a Wikipedia title repeated where two chunks meet
+    ("James Hutton James Hutton", "London London, UK"), empty pronunciation brackets ("(; 3 June 1726", "( )"), and
+    leftover article-template markers ("Body: 1.")"""
+    text = " ".join((text or "").replace('""', '"').split())
+    text = _MARKER.sub("", text)
+    text = re.sub(r"\(\s*[;,]\s*", "(", text)
+    text = re.sub(r"\(\s*\)\s*", "", text)
     words = text.split()
-    norm_words = [normalize(w) for w in words]
-    first = normalize(aliases[0]).split()[0] if aliases and normalize(aliases[0]) else ""
-    idx = next((k for k, w in enumerate(norm_words) if w == first), 0)
-    a = max(0, idx - n_words // 2)
-    return " ".join(words[a:a + n_words])
+    out, i = [], 0
+    while i < len(words):                                  # drop the first copy of a capitalised 1-4 word run said twice
+        for k in range(4, 0, -1):
+            a = [_wkey(w) for w in words[i:i + k]]; b = [_wkey(w) for w in words[i + k:i + 2 * k]]
+            if len(b) == k and a == b and all(a) and words[i][:1].isupper():
+                i += k
+                break
+        else:
+            out.append(words[i]); i += 1
+    return " ".join(out)
+
+
+def clean_alias(a):
+    """an answer string without stray punctuation at its ends ('Russia (' -> 'Russia')"""
+    return re.sub(r"^[\s(\[,;:\-]+|[\s(\[,;:\-]+$", "", " ".join(str(a).split()))
+
+
+def overlaps(bad, text):
+    """True if every content word of the bad answer shares a stem with a word of the text: catches wrong answers that are
+    a variant of what the good document says ('stand-up comedianish' vs 'stand-up comedian')"""
+    tw = [_wkey(w) for w in re.split(r"[\s\-/]+", text) if _wkey(w)]
+    bw = [_wkey(w) for w in re.split(r"[\s\-/]+", bad) if len(_wkey(w)) >= 3]
+    if not bw:
+        return False
+    stem = lambda a, b: min(len(a), len(b)) >= 3 and (a.startswith(b) or b.startswith(a)) and abs(len(a) - len(b)) <= 3
+    return all(any(stem(b, t) for t in tw) for b in bw)
+
+
+def _clean_question(q):
+    """some TriviaQA questions come wrapped in quotes, use doubled quotes inside, or end in '.' before the '?'"""
+    q = clean_text(q).strip('"').strip()
+    q = q.rstrip("?").rstrip()
+    return q + ("" if q.endswith((".", "!")) else "?")
+
+
+def _sentences(text):
+    """whole sentences, minus any with a template placeholder, and minus a first sentence that starts mid-way (retrieved
+    passages are fixed-size chunks, so they often open in the middle of a sentence)"""
+    sents = [s for s in re.split(r"(?<=[.!?])\s+(?=[A-Z0-9\"(])", clean_text(text)) if s]
+    if sents and not re.match(r"[A-Z0-9\"(\u2018\u201c']", sents[0]):
+        sents = sents[1:]
+    return [s for s in sents if not _PLACEHOLDER.search(s)]
+
+
+def _passage_window(text, aliases, n_words=90):
+    """whole sentences around the first sentence that names the answer, up to about n_words: no sentence is cut, so the
+    passage never ends mid-sentence. Returns "" if no sentence names the answer."""
+    sents = _sentences(text)
+    # retrieved passages are fixed-size chunks, so their last sentence is often cut off: leave it out
+    if sents and not sents[-1].rstrip().endswith((".", "!", "?", '"', "'", ")")):
+        sents = sents[:-1]
+    hit = next((i for i, s in enumerate(sents) if contains_any(s, aliases)), None)
+    if hit is None:
+        return ""
+    a = b = hit
+    size = len(sents[hit].split())
+    while True:                                           # grow forward first, then backward, while it fits
+        if b + 1 < len(sents) and size + len(sents[b + 1].split()) <= n_words:
+            b += 1; size += len(sents[b].split()); continue
+        if a > 0 and size + len(sents[a - 1].split()) <= n_words:
+            a -= 1; size += len(sents[a].split()); continue
+        break
+    return " ".join(sents[a:b + 1])
 
 
 def _clean_fake(text, refs, wrong):
@@ -122,13 +191,11 @@ def _clean_fake(text, refs, wrong):
     which belongs to the attack tests, not the plain document) and every sentence that names a gold answer.
     Returns None if the wrong answer does not survive."""
     text = re.sub(r"^\s*[A-Z][A-Za-z .&]{1,30}(news|News|NEWS)\s*:\s*", "", text or "")
-    sents = re.split(r"(?<=[.!?])\s+", text.strip())
-    keep = [s for s in sents if not contains_any(s, refs)]
-    out = " ".join(keep).strip()
+    keep = [s for s in _sentences(text) if not contains_any(s, refs)]
+    out = _passage_window(" ".join(keep), [wrong], 110)      # whole sentences only, around the wrong answer
     if not out or not contains_any(out, [wrong]) or contains_any(out, refs):
         return None
-    words = out.split()
-    return " ".join(words[:110])
+    return out
 
 
 def real_facts(cram_repo, n_per_dataset=50, seed=0, exclude_from=900):
@@ -143,8 +210,8 @@ def real_facts(cram_repo, n_per_dataset=50, seed=0, exclude_from=900):
         for x in data:
             if kept >= n_per_dataset:
                 break
-            refs = [r for r in x["reference"] if normalize(r)]
-            wrong = str(x.get("wrong answer", "")).strip()
+            refs = [clean_alias(r) for r in x["reference"] if normalize(r)]
+            wrong = clean_alias(str(x.get("wrong answer", "")))
             if not refs or not wrong or len(wrong.split()) > 5 or max(len(r.split()) for r in refs) > 5:
                 continue
             # the bad answer must not overlap a gold answer, or scoring is ambiguous
@@ -153,19 +220,27 @@ def real_facts(cram_repo, n_per_dataset=50, seed=0, exclude_from=900):
             # the question itself must not contain either answer (the templated documents quote the question)
             if contains_any(x["question"], refs) or contains_any(x["question"], [wrong]):
                 continue
-            passage = next((p for p in x["reranked_dense_ctxs"][:10] if contains_any(p, refs) and not contains_any(p, [wrong])), None)
-            if passage is None:
-                continue
-            window = _passage_window(passage, [r for r in refs if contains_any(passage, [r])])
-            if not contains_any(window, refs) or contains_any(window, [wrong]):
+            # the first of the top-10 retrieved passages that gives a clean window: whole sentences, naming a gold answer
+            # and not the wrong one, and no empty quote marks (titles the source data stripped out, as in 'the film "",')
+            window = ""
+            for p in x["reranked_dense_ctxs"][:10]:
+                if not contains_any(p, refs) or contains_any(p, [wrong]):
+                    continue
+                w = _passage_window(p, [r for r in refs if contains_any(p, [r])])
+                if w and contains_any(w, refs) and not contains_any(w, [wrong]) and '""' not in w:
+                    window = w
+                    break
+            if not window or overlaps(wrong, window):            # the wrong answer must not be a variant of the passage's
                 continue
             bad_passage = _clean_fake(x.get("ori_fake", [""])[0], refs, wrong)
             if bad_passage is None:
                 continue
+            # the answer shown for this fact is the gold alias the passage actually states (every alias still scores)
+            shown = next(r for r in refs if contains_any(window, [r]))
             out.append({
                 "fact_id": f"{ds}{x['id']}", "fact_type": "real", "entity": None, "attribute": ds,
-                "question": x["question"].strip().rstrip("?") + "?",
-                "good": refs[0], "bad": wrong, "good_aliases": refs, "bad_aliases": [wrong],
+                "question": _clean_question(x["question"]),
+                "good": shown, "bad": wrong, "good_aliases": refs, "bad_aliases": [wrong],
                 "good_passage": window, "bad_passage": bad_passage, "source": f"CrAM {ds} id {x['id']}",
             })
             kept += 1
@@ -191,7 +266,7 @@ def cag_facts(cag_repo, n=50, seed=0):
     for x in data:
         if len(out) >= n:
             break
-        gold = x["answer"]; wrong = [c for c in x["choices"] if c != gold]
+        gold = clean_alias(x["answer"]); wrong = [clean_alias(c) for c in x["choices"] if c != x["answer"]]
         if contains_any(x["question"], [gold] + wrong):
             continue
         hi = [CRED_LABEL.sub("", d["text"]) for d in x["docs"] if d["cred"] == "high"]
@@ -202,7 +277,7 @@ def cag_facts(cag_repo, n=50, seed=0):
         if good is None or bad is None:
             continue
         gw = _passage_window(good, [gold], 110); bw = _passage_window(bad[0], [bad[1]], 110)
-        if not contains_any(gw, [gold]) or not contains_any(bw, [bad[1]]):
+        if not contains_any(gw, [gold]) or not contains_any(bw, [bad[1]]) or '""' in gw + bw or overlaps(bad[1], gw):
             continue
         out.append({
             "fact_id": f"np{x['id']}", "fact_type": "real", "entity": None, "attribute": "newspolluted",

@@ -23,10 +23,13 @@ CAG=ruotong-pan/CAG-7b
 
 cd "$BENCH_DIR"; mkdir -p logs runs results
 # source your environment here, e.g.:  source ~/venvs/relbench/bin/activate
-# real facts come from the original repos, not from David's copies
-[ -d upstream/CrAM ] || git clone --depth 1 https://github.com/Aatrox103/CrAM.git upstream/CrAM
-[ -d upstream/CAG ]  || git clone --depth 1 https://github.com/panruotong/CAG.git upstream/CAG
-python -m bench.generate --cram_repo upstream/CrAM --cag_repo upstream/CAG --suite core --out data/bench.jsonl --facts_out data/facts.jsonl
+# data/bench.jsonl is committed, so every run tests the same cases. It is rebuilt (from the original CrAM and CAG repos) only if
+# missing; delete it first to rebuild on purpose.
+if [ ! -f data/bench.jsonl ]; then
+  [ -d upstream/CrAM ] || git clone --depth 1 https://github.com/Aatrox103/CrAM.git upstream/CrAM
+  [ -d upstream/CAG ]  || git clone --depth 1 https://github.com/panruotong/CAG.git upstream/CAG
+  python -m bench.generate --cram_repo upstream/CrAM --cag_repo upstream/CAG --suite core --out data/bench.jsonl --facts_out data/facts.jsonl
+fi
 
 # the current vectors were trained with a doubled begin-of-text token, so evaluate them the same way (drop --double_bos once
 # David's retrained vectors from the simplify-data branch are in). Each layout uses the direction and the CrAM heads made for it:

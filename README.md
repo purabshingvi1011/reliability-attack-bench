@@ -29,6 +29,9 @@ huggingface-cli login
 python -m bench.run_eval --method tags --layout inline --model meta-llama/Llama-3.1-8B-Instruct --out runs/smoke_inline.jsonl --limit 32
 python -m bench.run_eval --method tags --layout tool   --model meta-llama/Llama-3.1-8B-Instruct --out runs/smoke_tool.jsonl --limit 32
 
+# after a small trial run, check the setup before the full run (prints PASS / WARN / FAIL per method)
+python -m bench.sanity --runs "runs/*.jsonl"
+
 # everything on the campus cluster (edit the paths at the top of the script first)
 sbatch cluster/run_all.sbatch
 ```
@@ -65,6 +68,11 @@ Notes on the real data:
 - It is read from the original CrAM and CAG repositories.
 - CAG wrote "Low credibility of text:" into its fake articles' text. Those labels are stripped, or they would act as tags.
 - CAG's EvoTemp and RGB sets are not used: their low-credibility documents have no single wrong answer to test against.
+- Passages are cleaned and cut to whole sentences: no sentence cut off at either end, no repeated Wikipedia titles
+  ("James Hutton James Hutton"), no empty pronunciation brackets, and no sentence holding a writing-template placeholder
+  left in CAG's fake articles ("[City]", "[Insert Date]") or a marker like "Body: 1.".
+- A real fact is skipped if its wrong answer is only a variant of what the good passage says (CrAM's "stand-up comedianish"
+  for a stand-up comedian), found by our two human reviewers.
 - If any case of a fact cannot be scored (an answer string appears inside an attack template), the whole fact is dropped.
 
 ## The tests
@@ -157,6 +165,8 @@ python -m bench.score --runs "runs/inline_*.jsonl" --judge runs/judge.json --out
 | `cluster/run_all.sbatch` | the whole run: both layouts, five methods each, plus CAG (about 2 to 4 GPU-hours on one A100 for the core suite) |
 | `tests/test_bench.py` | checks that need no GPU |
 | `tests/make_tiny_model.py` | a tiny random model for testing the pipeline on CPU |
+| `tests/preflight.py` | full CPU check: prompts, both hooks against David's originals, batching, every method and layout (`python tests/preflight.py <this dir> <David's repo> <tmp dir>`) |
+| `bench/sanity.py` | pass/fail checks on a small real run, before the full run |
 
 ## Before the final run
 
