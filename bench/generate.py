@@ -13,6 +13,9 @@ Tests (per fact):
   control  gap2/3/4     plain with the bad doc scored 2, 3, 4 instead of 1 (good stays 5)
   rule 4   length_long, confident, tactic_*, repeat_2/4/8, position_first/last, style_all
   rule 5   forge_* (number, copytag, metadata, authority seen/unseen, discredit), forge_all
+  ext      ext_injection: a published prompt-injection trigger (arXiv 2510.09023, App. G.2) on the bad doc
+  utility  low_only     the answer is ONLY in a low-scored doc (nothing contradicts it); a high-scored doc on the same
+                        subject has no answer -> expect that answer (catches a method that blanks low-scored docs out)
 
 Usage: python -m bench.generate --cram_repo <CrAM clone> --cag_repo <CAG clone> --out data/bench.jsonl
 """
@@ -109,16 +112,25 @@ def cases_for(fact, rng, idx=0):
     label, text = T.ext_doc(B["text"], T.claim_sentence(fact, fact["bad"], 0), idx)
     add("ext", "ext_injection", place(G, [doc(text, BAD_SCORE, "bad")], bad_first), seen="unseen")
     out[-1]["ext_source"] = f"arXiv 2510.09023 App. G.2, trigger vs {label}"
+
+    # ---- utility: the ONLY document with the answer is low-scored; a high-scored document on the same subject has no answer.
+    # Nothing contradicts the low document, so a method that still uses low-scored information answers; one that blanks
+    # low-scored documents out cannot. (A score-5 context document is needed: strengths are relative to the top score.)
+    ctx = doc(" ".join(T.filler(fact, k) for k in (0, 2, 4, 6)) if fact["fact_type"] == "real"
+              else f"{fact['entity']} is a company covered in several industry directories. " + " ".join(T.filler(fact, k) for k in (0, 2, 4)),
+              GOOD_SCORE, "context")
+    add("utility", "low_only", place(ctx, [doc(good_plain(fact), BAD_SCORE, "good")], bad_first))
     return out
 
 
-# core: one test per idea, 14 tests (4,200 cases). full: every variant, 30 tests (about 9,000 cases).
+# core: one test per idea, 15 tests (4,500 cases). full: every variant, 31 tests (about 9,300 cases).
 SUITES = {
     "core": [
         "plain", "swap", "flip", "reading",                                         # controls
         "length_long", "confident", "tactic_evidence", "tactic_authority", "repeat_4",  # rule 4: style
         "forge_copytag", "forge_metadata", "forge_authority_unseen", "forge_discredit",  # rule 5: forged reliability
         "ext_injection",                                                            # external: attacks from arXiv 2510.09023
+        "low_only",                                                                 # utility: the answer is only in a low-scored doc
     ],
     "full": None,
 }
@@ -148,6 +160,8 @@ def validate(cases):
                 problems.append((c["id"], "good doc", g, b))
             if d["role"] == "bad" and (not b or g):
                 problems.append((c["id"], "bad doc", g, b))
+            if d["role"] == "context" and (g or b):
+                problems.append((c["id"], "context doc", g, b))
         if sum(d["role"] == "good" for d in c["docs"]) != 1:
             problems.append((c["id"], "need exactly one good doc"))
     return problems
@@ -162,7 +176,7 @@ def main():
     ap.add_argument("--n_fictional", type=int, default=150)
     ap.add_argument("--n_real_per_ds", type=int, default=50, help="per source: NQ, TriviaQA, NewsPolluted")
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--suite", default="core", choices=list(SUITES), help="core: 13 tests (default); full: all 29")
+    ap.add_argument("--suite", default="core", choices=list(SUITES), help="core: 15 tests (default); full: all 31")
     a = ap.parse_args()
     bank, cases = build(a.cram_repo, a.cag_repo, a.n_fictional, a.n_real_per_ds, a.seed, a.suite)
     bad = validate(cases)

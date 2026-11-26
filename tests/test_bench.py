@@ -26,14 +26,14 @@ def test_counts_and_validity():
     assert not validate(cs)
     per_test = Counter(c["test"] for c in cs)
     assert len(set(per_test.values())) == 1, per_test        # every test has every fact
-    assert len(per_test) == 30
+    assert len(per_test) == 31
 
 
 def test_core_suite():
     from bench.generate import SUITES
     _, core = build(n_fictional=40, suite="core")
-    assert {c["test"] for c in core} == set(SUITES["core"]) and len(SUITES["core"]) == 14
-    assert len(core) == 40 * 14 and not validate(core)
+    assert {c["test"] for c in core} == set(SUITES["core"]) and len(SUITES["core"]) == 15
+    assert len(core) == 40 * 15 and not validate(core)
 
 
 def test_external_injections():
@@ -55,6 +55,8 @@ def test_expectations():
         good = [d for d in c["docs"] if d["role"] == "good"][0]; bads = [d for d in c["docs"] if d["role"] == "bad"]
         if c["test"] == "swap":
             assert good["score"] == 1 and all(b["score"] == 5 for b in bads)
+        elif c["test"] == "low_only":
+            assert good["score"] == 1 and not bads
         else:
             assert good["score"] == 5 and all(b["score"] < 5 for b in bads)
 
@@ -120,6 +122,20 @@ def test_reading_question_points_at_bad_doc():
     for c in cases():
         if c["test"] == "reading":
             assert c["docs"][c["report_doc"] - 1]["role"] == "bad"
+
+
+def test_drop_and_low_only():
+    cs = [json.loads(l) for l in open(os.path.join(os.path.dirname(__file__), "..", "data", "bench.jsonl"))]
+    lo = [c for c in cs if c["test"] == "low_only"]
+    assert len(lo) == 300
+    for c in lo:
+        g = [d for d in c["docs"] if d["role"] == "good"]
+        assert len(g) == 1 and g[0]["score"] == 1 and c["expect"] == "good"
+        assert any(d["score"] == 5 and d["role"] == "context" for d in c["docs"])
+    b = R.build(lo[0], "drop")
+    assert b["scores"] == [5] and lo[0]["good"] not in b["messages"][1]["content"]
+    p = next(c for c in cs if c["test"] == "plain")
+    assert R.build(p, "drop")["scores"] == [5]
 
 
 def test_strengths():

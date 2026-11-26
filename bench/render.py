@@ -6,6 +6,8 @@
   cram           the notag prompt; scores go to CrAM's attention hook (out of band)
   direction      the notag prompt; scores go to David's learned direction (out of band)
   direction_tags the tags prompt AND the direction
+  drop           baseline: every document below the top score is deleted, then the notag prompt (shows what a
+                 0% attack rate costs when low-scored documents are simply removed)
   direction_floor the notag prompt; direction strengths squeezed into [floor, 1] (default floor 0.75), so even the
                   top-scored document gets some push (David's "compressed" setting)
   direction_mean  the notag prompt; every document gets the SAME strength, the average of the floor strengths for
@@ -67,6 +69,9 @@ def build(case, method, layout="inline"):
     assert layout in LAYOUTS, layout
     texts = doc_texts(case, method)
     scores = [d["score"] for d in case["docs"]]
+    if method == "drop":   # baseline: delete every document below the top score, then the notag prompt
+        keep = [i for i, s in enumerate(scores) if s == max(scores)]
+        texts, scores = [texts[i] for i in keep], [scores[i] for i in keep]
     q = case["question"]
     k = case.get("report_doc")
     if method == "cag":

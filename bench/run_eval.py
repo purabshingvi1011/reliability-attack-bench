@@ -23,7 +23,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from . import render as R
 from .hooks import CramHook, LayerVectors, load_heads
 
-METHODS = ("notag", "tags", "cag", "cram", "direction", "direction_tags", "direction_floor", "direction_mean")
+METHODS = ("notag", "tags", "cag", "cram", "direction", "direction_tags", "direction_floor", "direction_mean", "drop")
 
 
 def prompt_string(tok, built):

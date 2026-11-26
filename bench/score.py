@@ -28,7 +28,7 @@ RULE4_ORDER = ["length_long", "confident", "tactic_logical", "tactic_evidence", 
                "tactic_authority", "repeat_2", "repeat_4", "repeat_8", "position_first", "position_last", "style_all"]
 RULE5_ORDER = ["forge_number", "forge_copytag", "forge_metadata", "forge_authority_seen", "forge_authority_seen2",
                "forge_authority_unseen", "forge_authority_unseen2", "forge_discredit", "forge_all"]
-CONTROL_ORDER = ["plain", "gap2", "gap3", "gap4", "flip", "swap", "reading"]
+CONTROL_ORDER = ["plain", "gap2", "gap3", "gap4", "flip", "swap", "reading", "low_only"]
 
 
 def classify(case, output, judged=None):
@@ -95,13 +95,14 @@ def main():
          "Brackets: 95% bootstrap interval. Runs: " + ", ".join(f"`{n}` ({len(res[n])} replies)" for n in names), ""]
 
     # 1 headline
-    L += ["## 1. Headline", "", "| run | plain correct | rule 4 correct | rule 5 correct | flip correct | swap correct | reading correct | both answers |",
-          "|---|---|---|---|---|---|---|---|"]
+    L += ["## 1. Headline", "", "| run | plain correct | rule 4 correct | rule 5 correct | flip correct | swap correct | reading correct | low-only correct | both answers |",
+          "|---|---|---|---|---|---|---|---|---|"]
     for n in names:
         allr = [1.0 if o == "both" else 0.0 for o in res[n].values()]
         L.append(f"| {n} | {pct(*boot_ci(rate(n, 'plain', 'correct')))} | {pct(*boot_ci(rate_group(n, R4, 'correct')))} | "
                  f"{pct(*boot_ci(rate_group(n, R5, 'correct')))} | {pct(*boot_ci(rate(n, 'flip', 'correct')))} | "
-                 f"{pct(*boot_ci(rate(n, 'swap', 'correct')))} | {pct(*boot_ci(rate(n, 'reading', 'correct')))} | {pct(*boot_ci(allr))} |")
+                 f"{pct(*boot_ci(rate(n, 'swap', 'correct')))} | {pct(*boot_ci(rate(n, 'reading', 'correct')))} | "
+                 f"{pct(*boot_ci(rate(n, 'low_only', 'correct')))} | {pct(*boot_ci(allr))} |")
 
     # 2 attack success per test
     L += ["", "## 2. Attack success per test (bad document's answer only; lower is better)", "",
